@@ -6,11 +6,61 @@ import os
 import json
 import math
 import random
+import hashlib
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 app = Flask(__name__, static_folder='../frontend/build', static_url_path='/')
 CORS(app)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'volunteer_hub.db')
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def send_signup_email(to_email, username):
+    """Attempt to send a signup confirmation email. Logs to console if SMTP is unavailable."""
+    subject = "Welcome to Volunteer Hub!"
+    body = f"""Hi {username},
+
+Welcome to Volunteer Hub! Your account has been created successfully.
+
+You can now sign in and start finding local volunteering opportunities in your community.
+
+Thank you for joining us!
+
+— The Volunteer Hub Team
+"""
+    try:
+        smtp_host = os.environ.get('SMTP_HOST', '')
+        smtp_port = int(os.environ.get('SMTP_PORT', '587'))
+        smtp_user = os.environ.get('SMTP_USER', '')
+        smtp_pass = os.environ.get('SMTP_PASS', '')
+        from_email = os.environ.get('SMTP_FROM', 'noreply@volunteerhub.app')
+
+        if smtp_host and smtp_user:
+            msg = MIMEMultipart()
+            msg['From'] = from_email
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'plain'))
+
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(from_email, to_email, msg.as_string())
+            print(f"[EMAIL] Signup confirmation sent to {to_email}")
+            return True
+        else:
+            # No SMTP configured — log the notification
+            print(f"[EMAIL-LOG] Signup notification for {to_email}:")
+            print(f"  Subject: {subject}")
+            print(f"  Body: {body[:120]}...")
+            return True
+    except Exception as e:
+        print(f"[EMAIL-ERROR] Failed to send to {to_email}: {e}")
+        return False
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -26,6 +76,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
+            username TEXT UNIQUE DEFAULT '',
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT DEFAULT '',
             avatar_initials TEXT DEFAULT '',
@@ -130,7 +181,7 @@ def init_db():
 
     # Seed skills
     skills = ['Heavy Lifting', 'Tech Help', 'Gardening', 'Transportation',
-              'Cleaning', 'Cooking', 'Tutoring', 'Pet Care', 'Repairs', 'Arts & Crafts']
+              'Cleaning', 'Cooking', 'Tutoring', 'Pet Care', 'Repairs', 'Arts & Crafts', 'Others']
     for skill in skills:
         c.execute("INSERT OR IGNORE INTO skills (name) VALUES (?)", (skill,))
 
@@ -138,18 +189,18 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM users")
     if c.fetchone()[0] == 0:
         users = [
-            ('John Doe', 'john@example.com', 'JD', 1, 0, 'January 2026', 4.9, 12.0, 5),
-            ('Sarah Johnson', 'sarah@example.com', 'SJ', 1, 0, 'December 2025', 4.9, 45.0, 23),
-            ('Mike Chen', 'mike@example.com', 'MC', 1, 0, 'November 2025', 4.7, 30.0, 15),
-            ('Margaret Wilson', 'margaret@example.com', 'MW', 1, 0, 'October 2025', 4.8, 8.0, 3),
-            ('Emily Davis', 'emily@example.com', 'ED', 1, 0, 'January 2026', 4.6, 20.0, 10),
-            ('Community Garden Org', 'garden@example.com', 'CG', 1, 1, 'September 2025', 5.0, 100.0, 50),
-            ('Local Library', 'library@example.com', 'LL', 1, 1, 'August 2025', 4.9, 200.0, 80),
+            ('John Doe', 'johndoe', 'john@example.com', hash_password('password123'), 'JD', 1, 0, 'January 2026', 4.9, 12.0, 5),
+            ('Sarah Johnson', 'sarahj', 'sarah@example.com', hash_password('password123'), 'SJ', 1, 0, 'December 2025', 4.9, 45.0, 23),
+            ('Mike Chen', 'mikechen', 'mike@example.com', hash_password('password123'), 'MC', 1, 0, 'November 2025', 4.7, 30.0, 15),
+            ('Margaret Wilson', 'margaretw', 'margaret@example.com', hash_password('password123'), 'MW', 1, 0, 'October 2025', 4.8, 8.0, 3),
+            ('Emily Davis', 'emilyd', 'emily@example.com', hash_password('password123'), 'ED', 1, 0, 'January 2026', 4.6, 20.0, 10),
+            ('Community Garden Org', 'communitygarden', 'garden@example.com', hash_password('password123'), 'CG', 1, 1, 'September 2025', 5.0, 100.0, 50),
+            ('Local Library', 'locallibrary', 'library@example.com', hash_password('password123'), 'LL', 1, 1, 'August 2025', 4.9, 200.0, 80),
         ]
         for u in users:
-            c.execute("""INSERT INTO users (name, email, avatar_initials, is_verified, is_organization,
+            c.execute("""INSERT INTO users (name, username, email, password_hash, avatar_initials, is_verified, is_organization,
                         member_since, rating, total_hours, tasks_completed)
-                        VALUES (?,?,?,?,?,?,?,?,?)""", u)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?)""", u)
 
         # Assign skills to users
         user_skill_map = {
@@ -160,20 +211,18 @@ def init_db():
                 c.execute("INSERT OR IGNORE INTO user_skills VALUES (?,?)", (uid, sid))
 
         # Seed tasks
-        cities = ['Bath', 'Birmingham', 'Bristol', 'Cardiff', 'Edinburgh',
-                'Exeter', 'Glasgow', 'Leeds', 'Liverpool', 'London',
-                'Manchester', 'Newcastle', 'Plymouth', 'Sheffield', 'Southampton']
+        cities = ['London', 'Exeter', 'Bristol', 'Manchester', 'Liverpool']
         tasks_data = [
-            ('Help elderly neighbor with grocery shopping', 'Need someone to help carry groceries from NTUC to my home. Heavy items involved.', 4, None, 'open', 60, '123 Oak Street', cities[0], 1.3521, 103.8198, 1, '2026-02-14', '14:00'),
-            ('Community garden weeding session', 'Weekly weeding at the community garden. Tools provided.', 6, None, 'open', 120, '45 Garden Ave', cities[1], 1.3496, 103.9568, 1, '2026-02-15', '09:00'),
-            ('Teach basic computer skills to seniors', 'Help seniors learn to use smartphones and email at the community center.', 7, None, 'open', 90, '78 Library Road', cities[2], 1.3329, 103.7436, 1, '2026-02-16', '10:00'),
-            ('Dog walking for recovering patient', 'I recently had surgery and need help walking my golden retriever for 2 weeks.', 5, None, 'open', 30, '56 Maple Drive', cities[3], 1.4382, 103.7890, 1, '2026-02-17', '08:00'),
-            ('Sort donations at food bank', 'Help organize and sort incoming food donations.', 6, 2, 'completed', 120, '200 Charity Lane', cities[4], 1.3236, 103.9273, 1, '2026-02-10', '09:00'),
-            ('Paint community mural', 'Help paint a neighborhood mural on the community center wall.', 6, None, 'open', 180, '15 Art Street', cities[5], 1.3691, 103.8454, 1, '2026-02-20', '10:00'),
-            ('Litter picking at East Coast Park', 'Monthly cleanup drive at the beach. Bags and gloves provided.', 6, None, 'open', 90, 'East Coast Park', cities[0], 1.3008, 103.9122, 1, '2026-02-22', '07:00'),
-            ('Help with house moving', 'Moving to a new apartment. Need help carrying boxes.', 4, None, 'open', 180, '88 Block Street', cities[1], 1.3530, 103.9440, 1, '2026-02-25', '09:00'),
-            ('Cooking meals for shelter', 'Prepare meals for 20 people at the homeless shelter.', 7, None, 'open', 120, '30 Shelter Road', cities[2], 1.3350, 103.7500, 1, '2026-02-28', '11:00'),
-            ('Fix leaky faucet for elderly resident', 'Simple plumbing repair needed at elderly resident home.', 4, None, 'open', 60, '12 Resident Lane', cities[3], 1.4400, 103.7850, 1, '2026-03-01', '14:00'),
+            ('Help elderly neighbour with grocery shopping', 'Need someone to help carry groceries from Tesco to my home. Heavy items involved.', 4, None, 'open', 60, '23 Baker Street', cities[0], 51.5074, -0.1278, 1, '2026-02-14', '14:00'),
+            ('Community garden weeding session', 'Weekly weeding at the community garden. Tools provided.', 6, None, 'open', 120, '12 Cathedral Close', cities[1], 50.7184, -3.5339, 1, '2026-02-15', '09:00'),
+            ('Teach basic computer skills to seniors', 'Help seniors learn to use smartphones and email at the community centre.', 7, None, 'open', 90, '45 Park Street', cities[2], 51.4545, -2.5879, 1, '2026-02-16', '10:00'),
+            ('Dog walking for recovering patient', 'I recently had surgery and need help walking my golden retriever for 2 weeks.', 5, None, 'open', 30, '78 Wilmslow Road', cities[3], 53.4808, -2.2426, 1, '2026-02-17', '08:00'),
+            ('Sort donations at food bank', 'Help organise and sort incoming food donations.', 6, 2, 'completed', 120, '34 Bold Street', cities[4], 53.4084, -2.9916, 1, '2026-02-10', '09:00'),
+            ('Paint community mural', 'Help paint a neighbourhood mural on the community centre wall.', 6, None, 'open', 180, '9 Shoreditch High Street', cities[0], 51.5229, -0.0777, 1, '2026-02-20', '10:00'),
+            ('Litter picking at Hyde Park', 'Monthly cleanup drive at the park. Bags and gloves provided.', 6, None, 'open', 90, 'Hyde Park', cities[0], 51.5073, -0.1657, 1, '2026-02-22', '07:00'),
+            ('Help with house moving', 'Moving to a new flat. Need help carrying boxes.', 4, None, 'open', 180, '55 Whiteladies Road', cities[2], 51.4618, -2.6065, 1, '2026-02-25', '09:00'),
+            ('Cooking meals for shelter', 'Prepare meals for 20 people at the homeless shelter.', 7, None, 'open', 120, '16 Deansgate', cities[3], 53.4794, -2.2489, 1, '2026-02-28', '11:00'),
+            ('Fix leaky faucet for elderly resident', 'Simple plumbing repair needed at elderly resident home.', 4, None, 'open', 60, '8 Penny Lane', cities[4], 53.3997, -2.9512, 1, '2026-03-01', '14:00'),
         ]
         for t in tasks_data:
             c.execute("""INSERT INTO tasks (title, description, posted_by, assigned_to, status,
@@ -194,7 +243,7 @@ def init_db():
         posts = [
             (2, 5, 'It was wonderful helping Margaret today! She had so many stories to share while we sorted groceries together. Small acts of kindness really do make a difference.', '', 12),
             (3, None, 'Just finished a great tutoring session at the library. The seniors are getting so good with their phones!', '', 8),
-            (1, None, 'Looking forward to the community garden session this weekend. Who else is joining?', '', 5),
+            (1, None, 'Looking forward to the community garden session this weekend in Exeter. Who else is joining?', '', 5),
         ]
         for p in posts:
             c.execute("INSERT INTO community_posts (user_id, task_id, content, image_url, likes) VALUES (?,?,?,?,?)", p)
@@ -237,32 +286,129 @@ def init_db():
 # ============ AUTH ROUTES ============
 @app.route('/api/auth/login', methods=['POST'])
 def login():
+    """Login with email or username + password."""
     data = request.json
-    conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE email = ?", (data.get('email', ''),)).fetchone()
-    conn.close()
-    if user:
-        return jsonify(dict(user))
-    return jsonify({"error": "User not found"}), 404
+    identifier = data.get('identifier', data.get('email', ''))  # email or username
+    password = data.get('password', '')
+    provider = data.get('provider', '')  # 'gmail', 'meta', 'x' for social login
 
-@app.route('/api/auth/register', methods=['POST'])
-def register():
-    data = request.json
-    name = data.get('name', '')
-    email = data.get('email', '')
-    initials = ''.join([w[0].upper() for w in name.split()[:2]]) if name else '??'
     conn = get_db()
-    try:
+
+    if provider:
+        # Social login — just find or create by email
+        email = data.get('email', f'{identifier}@{provider}.placeholder')
+        user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        if user:
+            conn.close()
+            return jsonify(dict(user))
+        # Auto-create social user
+        name = data.get('name', identifier)
+        initials = ''.join([w[0].upper() for w in name.split()[:2]]) if name else '??'
         c = conn.cursor()
-        c.execute("""INSERT INTO users (name, email, avatar_initials, member_since)
-                    VALUES (?, ?, ?, ?)""", (name, email, initials, datetime.now().strftime('%B %Y')))
+        c.execute("""INSERT INTO users (name, username, email, avatar_initials, member_since)
+                     VALUES (?, ?, ?, ?, ?)""",
+                  (name, identifier.lower().replace(' ', ''), email, initials,
+                   datetime.now().strftime('%B %Y')))
         conn.commit()
         user = conn.execute("SELECT * FROM users WHERE id = ?", (c.lastrowid,)).fetchone()
         conn.close()
         return jsonify(dict(user)), 201
-    except sqlite3.IntegrityError:
+
+    # Username/password login
+    if not identifier or not password:
         conn.close()
-        return jsonify({"error": "Email already exists"}), 400
+        return jsonify({"error": "Username/email and password are required"}), 400
+
+    pw_hash = hash_password(password)
+    user = conn.execute(
+        "SELECT * FROM users WHERE (email = ? OR username = ?) AND password_hash = ?",
+        (identifier, identifier, pw_hash)
+    ).fetchone()
+    conn.close()
+
+    if user:
+        return jsonify(dict(user))
+    return jsonify({"error": "Invalid username/email or password"}), 401
+
+
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    """Register with username, email, and password. Sends confirmation email."""
+    data = request.json
+    username = data.get('username', '').strip()
+    email = data.get('email', '').strip()
+    password = data.get('password', '')
+    name = data.get('name', username)
+
+    if not username or not email or not password:
+        return jsonify({"error": "Username, email and password are required"}), 400
+
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
+
+    initials = ''.join([w[0].upper() for w in name.split()[:2]]) if name else username[:2].upper()
+    pw_hash = hash_password(password)
+
+    conn = get_db()
+    try:
+        # Check username uniqueness
+        existing = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+        if existing:
+            conn.close()
+            return jsonify({"error": "Username already taken"}), 409
+
+        c = conn.cursor()
+        c.execute("""INSERT INTO users (name, username, email, password_hash, avatar_initials, member_since)
+                    VALUES (?, ?, ?, ?, ?, ?)""",
+                  (name, username, email, pw_hash, initials, datetime.now().strftime('%B %Y')))
+        conn.commit()
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (c.lastrowid,)).fetchone()
+        conn.close()
+
+        # Send signup confirmation email
+        email_sent = send_signup_email(email, username)
+
+        result = dict(user)
+        result['email_sent'] = email_sent
+        return jsonify(result), 201
+
+    except sqlite3.IntegrityError as e:
+        conn.close()
+        if 'email' in str(e):
+            return jsonify({"error": "Email already registered"}), 409
+        return jsonify({"error": "Username already taken"}), 409
+
+
+@app.route('/api/auth/forgot-password', methods=['POST'])
+def forgot_password():
+    """Reset password given the registered email, new password and confirmation."""
+    data = request.json
+    email = data.get('email', '').strip()
+    new_password = data.get('new_password', '')
+    confirm_password = data.get('confirm_password', '')
+
+    if not email or not new_password or not confirm_password:
+        return jsonify({"error": "All fields are required"}), 400
+
+    if new_password != confirm_password:
+        return jsonify({"error": "Passwords do not match"}), 400
+
+    if len(new_password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
+
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    if not user:
+        conn.close()
+        return jsonify({"error": "No account found with this email"}), 404
+
+    new_hash = hash_password(new_password)
+    conn.execute("UPDATE users SET password_hash = ? WHERE email = ?", (new_hash, email))
+    conn.commit()
+    conn.close()
+
+    print(f"[PASSWORD-RESET] Password updated for {email}")
+    return jsonify({"message": "Password updated successfully"})
 
 
 # ============ TASKS ROUTES ============
@@ -436,14 +582,14 @@ def create_task():
             if any(kw in description for kw in keywords):
                 auto_skills.append(skill_name)
 
-    city = data.get('city', 'UK')
+    city = data.get('city', 'London')
 
     c.execute("""INSERT INTO tasks (title, description, posted_by, duration_minutes,
                 location_address, city, latitude, longitude, is_verified, scheduled_date, scheduled_time)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
               (data.get('title'), data.get('description', ''), data.get('posted_by', 1),
                data.get('duration_minutes', 60), data.get('location_address', ''),
-               city, data.get('latitude', 1.3521), data.get('longitude', 103.8198),
+               city, data.get('latitude', 51.5074), data.get('longitude', -0.1278),
                0, data.get('scheduled_date', ''), data.get('scheduled_time', '')))
     task_id = c.lastrowid
 

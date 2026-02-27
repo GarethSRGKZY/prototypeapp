@@ -2,8 +2,8 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext, useApi } from '../App';
 
-const ALL_SKILLS = ['Heavy Lifting', 'Tech Help', 'Gardening', 'Transportation', 'Cleaning', 'Cooking', 'Tutoring', 'Pet Care', 'Repairs', 'Arts & Crafts'];
-const CITIES = ['Singapore', 'Tampines', 'Jurong East', 'Woodlands', 'Bedok', 'Ang Mo Kio'];
+const ALL_SKILLS = ['Heavy Lifting', 'Tech Help', 'Gardening', 'Transportation', 'Cleaning', 'Cooking', 'Tutoring', 'Pet Care', 'Repairs', 'Arts & Crafts', 'Others'];
+const CITIES = ['London', 'Exeter', 'Bristol', 'Manchester', 'Liverpool'];
 
 export default function CreateTaskPage() {
   const { user, showToast } = useContext(AppContext);
@@ -14,7 +14,7 @@ export default function CreateTaskPage() {
   const [description, setDescription] = useState('');
   const [duration, setDuration] = useState(60);
   const [location, setLocation] = useState('');
-  const [city, setCity] = useState('Singapore');
+  const [city, setCity] = useState('London');
   const [selectedSkills, setSelectedSkills] = useState([]);
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');

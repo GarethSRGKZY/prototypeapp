@@ -40,7 +40,7 @@ export default function HomePage() {
     try {
       const data = await api.get('/api/tasks/cities');
       setCities(data);
-    } catch { setCities(['Singapore', 'Tampines', 'Jurong East', 'Woodlands', 'Bedok', 'Ang Mo Kio']); }
+    } catch { setCities(['London', 'Exeter', 'Bristol', 'Manchester', 'Liverpool']); }
   };
 
   const loadPostedTasks = async () => {
@@ -174,7 +174,7 @@ export default function HomePage() {
               </select>
               <select className="filter-select" value={selectedSkill} onChange={e => setSelectedSkill(e.target.value)}>
                 <option value="">All Skills</option>
-                {['Heavy Lifting','Tech Help','Gardening','Transportation','Cleaning','Cooking','Tutoring','Pet Care','Repairs','Arts & Crafts'].map(s => (
+                {['Heavy Lifting','Tech Help','Gardening','Transportation','Cleaning','Cooking','Tutoring','Pet Care','Repairs','Arts & Crafts','Others'].map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
@@ -443,30 +443,95 @@ function VolunteerCard({ volunteer, showToast }) {
 }
 
 function MapView({ tasks }) {
-  return (
-    <div className="map-container">
-      {tasks.slice(0, 8).map((task, i) => {
-        const positions = [
-          { top: '25%', left: '30%' }, { top: '45%', left: '55%' },
-          { top: '60%', left: '25%' }, { top: '35%', left: '70%' },
-          { top: '70%', left: '60%' }, { top: '20%', left: '50%' },
-          { top: '55%', left: '40%' }, { top: '80%', left: '45%' },
-        ];
-        const pos = positions[i] || positions[0];
-        return (
-          <div key={task.id || i} className="map-pin" style={{ ...pos, position: 'absolute' }} title={task.title}>
-            <svg width="24" height="32" viewBox="0 0 24 32" fill="#EF4444">
-              <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0zm0 16c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z"/>
-            </svg>
+  const mapRef = React.useRef(null);
+  const mapInstanceRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const L = window.L;
+    if (!L || !mapRef.current) return;
+
+    // Prevent re-init
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
+    }
+
+    // Centre on UK by default, or fit to task bounds
+    const defaultCenter = [52.5, -1.5];
+    const map = L.map(mapRef.current, {
+      center: defaultCenter,
+      zoom: 6,
+      zoomControl: true,
+      attributionControl: true
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 18
+    }).addTo(map);
+
+    // Custom marker icon
+    const pinIcon = L.divIcon({
+      html: `<svg width="28" height="36" viewBox="0 0 24 32" fill="#4F46E5">
+        <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0zm0 16c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z"/>
+      </svg>`,
+      iconSize: [28, 36],
+      iconAnchor: [14, 36],
+      popupAnchor: [0, -36],
+      className: ''
+    });
+
+    const bounds = [];
+    tasks.forEach(task => {
+      if (task.latitude && task.longitude && task.latitude !== 0) {
+        const lat = task.latitude;
+        const lng = task.longitude;
+        bounds.push([lat, lng]);
+
+        const durationStr = task.duration_minutes >= 60
+          ? `${Math.floor(task.duration_minutes / 60)}h`
+          : `${task.duration_minutes}m`;
+
+        const popup = `
+          <div style="font-family:'DM Sans',sans-serif;min-width:180px">
+            <strong style="font-size:13px;display:block;margin-bottom:4px">${task.title}</strong>
+            <span style="font-size:11px;color:#64748B">📍 ${task.city || ''} · 🕐 ${durationStr}</span>
+            ${task.skills?.length ? `<div style="margin-top:6px">${task.skills.map(s =>
+              `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;background:#EEF2FF;color:#4F46E5;margin:2px 2px 0 0">${s}</span>`
+            ).join('')}</div>` : ''}
           </div>
-        );
-      })}
-      <div className="map-center">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" strokeDasharray="4 4"/>
-        </svg>
-        <p style={{ marginTop: 4, fontSize: 13, fontWeight: 600 }}>Interactive Map</p>
-        <p style={{ fontSize: 11, color: '#94A3B8' }}>{tasks.length} tasks nearby</p>
+        `;
+
+        L.marker([lat, lng], { icon: pinIcon })
+          .addTo(map)
+          .bindPopup(popup);
+      }
+    });
+
+    if (bounds.length > 0) {
+      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 12 });
+    }
+
+    mapInstanceRef.current = map;
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [tasks]);
+
+  return (
+    <div style={{ position: 'relative', borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1.5px solid var(--border)' }}>
+      <div ref={mapRef} style={{ width: '100%', height: 420 }} />
+      <div style={{
+        position: 'absolute', bottom: 12, left: 12, background: 'rgba(255,255,255,0.92)',
+        backdropFilter: 'blur(8px)', padding: '6px 12px', borderRadius: 20,
+        fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', zIndex: 1000,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+      }}>
+        📍 {tasks.length} task{tasks.length !== 1 ? 's' : ''} shown
       </div>
     </div>
   );
@@ -517,10 +582,10 @@ function PostedTaskCard({ task }) {
 // Fallback sample data
 function getSampleTasks() {
   return [
-    { id: 1, title: 'Help elderly neighbor with grocery shopping', poster_name: 'Margaret Wilson', duration_minutes: 60, city: 'Singapore', location_address: '123 Oak Street', is_verified: 1, status: 'open', match_score: 95, skills: ['Heavy Lifting', 'Transportation'] },
-    { id: 2, title: 'Community garden weeding session', poster_name: 'Community Garden Org', duration_minutes: 120, city: 'Tampines', location_address: '45 Garden Ave', is_verified: 1, status: 'open', match_score: 82, skills: ['Gardening'] },
-    { id: 3, title: 'Teach basic computer skills to seniors', poster_name: 'Local Library', duration_minutes: 90, city: 'Jurong East', location_address: '78 Library Road', is_verified: 1, status: 'open', match_score: 70, skills: ['Tech Help', 'Tutoring'] },
-    { id: 4, title: 'Litter picking at East Coast Park', poster_name: 'Community Garden Org', duration_minutes: 90, city: 'Singapore', location_address: 'East Coast Park', is_verified: 1, status: 'open', match_score: 65, skills: ['Cleaning'] },
+    { id: 1, title: 'Help elderly neighbour with grocery shopping', poster_name: 'Margaret Wilson', duration_minutes: 60, city: 'London', location_address: '23 Baker Street', is_verified: 1, status: 'open', match_score: 95, skills: ['Heavy Lifting', 'Transportation'] },
+    { id: 2, title: 'Community garden weeding session', poster_name: 'Community Garden Org', duration_minutes: 120, city: 'Exeter', location_address: '12 Cathedral Close', is_verified: 1, status: 'open', match_score: 82, skills: ['Gardening'] },
+    { id: 3, title: 'Teach basic computer skills to seniors', poster_name: 'Local Library', duration_minutes: 90, city: 'Bristol', location_address: '45 Park Street', is_verified: 1, status: 'open', match_score: 70, skills: ['Tech Help', 'Tutoring'] },
+    { id: 4, title: 'Litter picking at Hyde Park', poster_name: 'Community Garden Org', duration_minutes: 90, city: 'London', location_address: 'Hyde Park', is_verified: 1, status: 'open', match_score: 65, skills: ['Cleaning'] },
   ];
 }
 

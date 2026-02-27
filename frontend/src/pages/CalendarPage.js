@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext, useApi } from '../App';
 
-const SKILLS = ['Heavy Lifting', 'Tech Help', 'Gardening', 'Transportation', 'Cleaning', 'Cooking', 'Tutoring', 'Pet Care'];
+const SKILLS = ['Heavy Lifting', 'Tech Help', 'Gardening', 'Transportation', 'Cleaning', 'Cooking', 'Tutoring', 'Pet Care', 'Repairs', 'Arts & Crafts', 'Others'];
 
 export default function CalendarPage() {
   const { user, showToast } = useContext(AppContext);
@@ -248,6 +248,6 @@ function ScheduleCard({ task, onComplete }) {
 
 function getSampleSchedule() {
   return [
-    { id: 1, title: 'Help elderly neighbor with grocery shopping', poster_name: 'Margaret Wilson', status: 'accepted', duration_minutes: 60, scheduled_date: new Date().toISOString().split('T')[0], scheduled_time: '14:00', location_address: '123 Oak Street', is_verified: 1 },
+    { id: 1, title: 'Help elderly neighbour with grocery shopping', poster_name: 'Margaret Wilson', status: 'accepted', duration_minutes: 60, scheduled_date: new Date().toISOString().split('T')[0], scheduled_time: '14:00', location_address: '23 Baker Street, London', is_verified: 1 },
   ];
 }

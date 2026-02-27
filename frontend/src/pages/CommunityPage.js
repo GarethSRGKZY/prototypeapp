@@ -186,7 +186,7 @@ export default function CommunityPage() {
 
 function getSamplePosts() {
   return [
-    { id: 1, author_name: 'Sarah Johnson', avatar_initials: 'SJ', is_verified: 1, content: 'It was wonderful helping Margaret today! She had so many stories to share while we sorted groceries together. Small acts of kindness really do make a difference.', task_title: 'Helped Margaret with grocery shopping', task_duration: 60, task_location: '123 Oak Street', likes: 12, created_at: new Date(Date.now() - 7200000).toISOString() },
+    { id: 1, author_name: 'Sarah Johnson', avatar_initials: 'SJ', is_verified: 1, content: 'It was wonderful helping Margaret today! She had so many stories to share while we sorted groceries together. Small acts of kindness really do make a difference.', task_title: 'Helped Margaret with grocery shopping', task_duration: 60, task_location: '23 Baker Street, London', likes: 12, created_at: new Date(Date.now() - 7200000).toISOString() },
     { id: 2, author_name: 'Mike Chen', avatar_initials: 'MC', is_verified: 1, content: 'Just finished a great tutoring session at the library. The seniors are getting so good with their phones!', likes: 8, created_at: new Date(Date.now() - 14400000).toISOString() },
     { id: 3, author_name: 'John Doe', avatar_initials: 'JD', is_verified: 1, content: 'Looking forward to the community garden session this weekend. Who else is joining?', likes: 5, created_at: new Date(Date.now() - 28800000).toISOString() },
   ];
