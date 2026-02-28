@@ -222,7 +222,7 @@ export default function HomePage() {
                 {user && (
                   <div className="gradient-banner">
                     <h3>✨ AI-Matched Tasks</h3>
-                    <p>Curated based on your skills, location, and availability</p>
+                    <p>Curated based on your skills, preferred location, and availability</p>
                   </div>
                 )}
 
@@ -355,6 +355,9 @@ function TaskCard({ task, onAccept, hasActiveTask, style }) {
       <div className="card-header">
         {task.match_score && (
           <span className="badge badge-match">✨ {task.match_score}% Match</span>
+        )}
+        {task.location_match && (
+          <span className="badge" style={{ background: '#ECFDF5', color: '#059669', fontSize: 11, padding: '3px 8px' }}>📍 Near you</span>
         )}
         {task.is_verified ? (
           <span className="badge badge-verified">🔵 Verified</span>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AppContext, useApi } from '../App';
 
 const SKILLS = ['Heavy Lifting', 'Tech Help', 'Gardening', 'Transportation', 'Cleaning', 'Cooking', 'Tutoring', 'Pet Care', 'Repairs', 'Arts & Crafts', 'Others'];
+const CITIES = ['London', 'Exeter', 'Bristol', 'Manchester', 'Liverpool'];
 
 export default function CalendarPage() {
   const { user, showToast } = useContext(AppContext);
@@ -15,6 +16,7 @@ export default function CalendarPage() {
   const [availDate, setAvailDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
   const [loading, setLoading] = useState(true);
 
   // Generate week days
@@ -69,13 +71,15 @@ export default function CalendarPage() {
         date: availDate,
         start_time: startTime,
         end_time: endTime,
-        skills: selectedSkills
+        skills: selectedSkills,
+        city: selectedCity
       });
       showToast('Availability posted! ✅');
       setAvailDate('');
       setStartTime('');
       setEndTime('');
       setSelectedSkills([]);
+      setSelectedCity('');
     } catch {
       showToast('Availability posted! ✅');
     }
@@ -173,6 +177,36 @@ export default function CalendarPage() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Location Selection */}
+            <div className="card">
+              <h3 style={{ marginBottom: 4 }}>📍 Preferred Location</h3>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>
+                Choose the city you're available in — this boosts your match % for tasks in that area
+              </p>
+              <select
+                className="form-input"
+                value={selectedCity}
+                onChange={e => setSelectedCity(e.target.value)}
+                style={{ fontSize: 15 }}
+              >
+                <option value="">Select a city</option>
+                {CITIES.map(city => (
+                  <option key={city} value={city}>{city}</option>
+                ))}
+              </select>
+              {selectedCity && (
+                <div style={{
+                  marginTop: 10, padding: '8px 12px', borderRadius: 'var(--radius-sm)',
+                  background: '#EEF2FF', display: 'flex', alignItems: 'center', gap: 8
+                }}>
+                  <span style={{ fontSize: 16 }}>📌</span>
+                  <span style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 500 }}>
+                    Tasks in {selectedCity} will get a higher match for you
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Time Slot */}

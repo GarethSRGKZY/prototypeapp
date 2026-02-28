@@ -139,6 +139,7 @@ def init_db():
             date TEXT NOT NULL,
             start_time TEXT NOT NULL,
             end_time TEXT NOT NULL,
+            city TEXT DEFAULT '',
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
 
@@ -271,13 +272,13 @@ def init_db():
 
         # Seed availability
         avail = [
-            (2, '2026-02-18', '14:00', '16:00'),
-            (2, '2026-02-20', '09:00', '12:00'),
-            (3, '2026-02-19', '10:00', '14:00'),
-            (5, '2026-02-18', '13:00', '17:00'),
+            (2, '2026-02-18', '14:00', '16:00', 'London'),
+            (2, '2026-02-20', '09:00', '12:00', 'Exeter'),
+            (3, '2026-02-19', '10:00', '14:00', 'Bristol'),
+            (5, '2026-02-18', '13:00', '17:00', 'Manchester'),
         ]
         for a in avail:
-            c.execute("INSERT INTO availability (user_id, date, start_time, end_time) VALUES (?,?,?,?)", a)
+            c.execute("INSERT INTO availability (user_id, date, start_time, end_time, city) VALUES (?,?,?,?,?)", a)
 
     conn.commit()
     conn.close()
@@ -694,6 +695,13 @@ def ai_match_tasks(user_id):
     """, (user_id,)).fetchall()
     user_skill_names = {s['name'] for s in user_skills}
 
+    # Get user's preferred cities from their availability postings
+    user_cities = conn.execute("""
+        SELECT DISTINCT city FROM availability
+        WHERE user_id = ? AND city != ''
+    """, (user_id,)).fetchall()
+    user_city_names = {c['city'] for c in user_cities}
+
     tasks = conn.execute("""
         SELECT t.*, u.name as poster_name, u.avatar_initials as poster_initials,
                u.is_verified as poster_verified
@@ -711,12 +719,24 @@ def ai_match_tasks(user_id):
         """, (t['id'],)).fetchall()
         t['skills'] = [s['name'] for s in task_skills]
 
-        # Score: skill match + proximity + recency
+        # Score: skill match (up to 55%) + location match (up to 25%) + base (10-20%)
         skill_match = len(set(t['skills']) & user_skill_names)
         total_skills = max(len(t['skills']), 1)
-        match_pct = int((skill_match / total_skills) * 80 + random.randint(10, 20))
+        skill_pct = (skill_match / total_skills) * 55
+
+        location_pct = 0
+        task_city = t.get('city', '')
+        if user_city_names and task_city:
+            if task_city in user_city_names:
+                location_pct = 25  # Exact city match
+            else:
+                location_pct = 5   # Different city, small base
+
+        base_pct = random.randint(10, 20)
+        match_pct = int(skill_pct + location_pct + base_pct)
         match_pct = min(match_pct, 99)
         t['match_score'] = match_pct
+        t['location_match'] = task_city in user_city_names if user_city_names else False
         scored_tasks.append(t)
 
     scored_tasks.sort(key=lambda x: x['match_score'], reverse=True)
@@ -765,8 +785,8 @@ def post_availability():
     data = request.json
     conn = get_db()
     c = conn.cursor()
-    c.execute("INSERT INTO availability (user_id, date, start_time, end_time) VALUES (?,?,?,?)",
-              (data['user_id'], data['date'], data['start_time'], data['end_time']))
+    c.execute("INSERT INTO availability (user_id, date, start_time, end_time, city) VALUES (?,?,?,?,?)",
+              (data['user_id'], data['date'], data['start_time'], data['end_time'], data.get('city', '')))
 
     # Update user skills if provided
     if 'skills' in data:
